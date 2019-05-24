@@ -9,7 +9,7 @@ setenforce  0
 sed -i "s/^SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config 
 
 2.关掉firewalld
-systemctl stop firewalld &&s ystemctl disable firewalld 
+systemctl stop firewalld &&s systemctl disable firewalld 
 
 3 关闭 swap
 swapoff -a  ##临时关闭
