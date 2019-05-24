@@ -1,51 +1,201 @@
-yum 安装kubernetes 安装前系统准备
-yum update 
-yum install -y bash-completion wget net-tools vim 
-vim /etc/selinux/config
-systemctl disable firewalld
-systemctl stop firewalld
-shutdown -r now
-安装kubernetes
-wget http://mirror.centos.org/centos/7/os/x86_64/Packages/python-rhsm-certificates-1.19.10-1.el7_4.x86_64.rpm
-rpm2cpio python-rhsm-certificates-1.19.10-1.el7_4.x86_64.rpm |cpio -iv --to-stdout ./etc/rhsm/ca/redhat-uep.pem > /etc/rhsm/ca/redhat-uep.pem
-yum install -y etcd kubernetes   ##安装kubernetes
-vi /etc/docker/daemon.json      ##修改docker镜像源加速器
-vim /etc/kubernetes/apiserver   ###把原来的配置改为：
-KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota"
-vim /etc/sysconfig/docker  ###配置修改如下
-OPTIONS='--selinux-enabled=false --insecure-registry gcr.io --log-driver=journald --signature-verification=false'
-启动kubernetes：
-systemctl start etcd 
-systemctl start docker
-systemctl start kube-apiserver
-systemctl start kube-controller-manager
-systemctl start kube-scheduler
-systemctl start kubelet
-systemctl start kube-proxy
+kubeadm 安装 kubernetes 集群
+master：192.168.124.143  2core 2g
+node01：192.168.124.144  1core 1.5G
+node02：192.168.124.145   1core 1.5G
+三台机器环境配置：
+yum update -y
+1.关掉 selinux
+setenforce  0 
+sed -i "s/^SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config 
 
-mysql_rc.yaml  添加
+2.关掉firewalld
+systemctl stop firewalld &&s ystemctl disable firewalld 
 
+3 关闭 swap
+swapoff -a  ##临时关闭
+sed -i 's/.*swap.*/#&/' /etc/fstab  ##永久关闭
+
+4.添加主机对应关系 vim /etc/hosts 
+master 192.168.124.143
+node01 192.168.124.144
+node02 192.168.124.145
+
+5.将桥接的IPV4流量传递到iptables的链
+cat << EOF | tee /etc/sysctl.d/k8s.conf
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sysctl --system
+
+6.设置国内 yum 源
+docker-ce 阿里云yum源
+wget http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo -O /etc/yum.repos.d/docker-ce.repo
+配置kubernetes 阿里云yum源
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+EOF
+
+7.安装基础环境
+yum install -y net-tools wget vim  ntpdate epel-release bash-completion
+
+8.安装docker 
+yum install -y docker-ce 
+systemctl enable docker && systemctl start docker
+
+9.安装kubelet  kubeadm  kubectl  并设置kubelet开机启动
+yum install -y kubelet kubeadm kubectl   
+systemctl enable kubelet     ##暂时不需要启动
+
+10.初始化master节点
+kubeadm init --kubernetes-version=v1.14.2 --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.124.143 --image-repository registry.aliyuncs.com/google_containers 
+### 指定版本 指定网络 指定apiserver ip 指定仓库
+[
+[init] Using Kubernetes version: v1.14.2
+[preflight] Running pre-flight checks
+	[WARNING IsDockerSystemdCheck]: detected "cgroupfs" as the Docker cgroup driver. The recommended driver is "systemd". Please follow the guide at https://kubernetes.io/docs/setup/cri/
+	[WARNING Hostname]: hostname "master" could not be reached
+	[WARNING Hostname]: hostname "master": lookup master on 192.168.124.2:53: no such host
+[preflight] Pulling images required for setting up a Kubernetes cluster
+[preflight] This might take a minute or two, depending on the speed of your internet connection
+[preflight] You can also perform this action in beforehand using 'kubeadm config images pull'
+[kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+[kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+[kubelet-start] Activating the kubelet service
+[certs] Using certificateDir folder "/etc/kubernetes/pki"
+[certs] Generating "front-proxy-ca" certificate and key
+[certs] Generating "front-proxy-client" certificate and key
+[certs] Generating "ca" certificate and key
+[certs] Generating "apiserver-kubelet-client" certificate and key
+[certs] Generating "apiserver" certificate and key
+[certs] apiserver serving cert is signed for DNS names [master kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local] and IPs [10.96.0.1 192.168.124.143]
+[certs] Generating "etcd/ca" certificate and key
+[certs] Generating "apiserver-etcd-client" certificate and key
+[certs] Generating "etcd/server" certificate and key
+[certs] etcd/server serving cert is signed for DNS names [master localhost] and IPs [192.168.124.143 127.0.0.1 ::1]
+[certs] Generating "etcd/peer" certificate and key
+[certs] etcd/peer serving cert is signed for DNS names [master localhost] and IPs [192.168.124.143 127.0.0.1 ::1]
+[certs] Generating "etcd/healthcheck-client" certificate and key
+[certs] Generating "sa" key and public key
+[kubeconfig] Using kubeconfig folder "/etc/kubernetes"
+[kubeconfig] Writing "admin.conf" kubeconfig file
+[kubeconfig] Writing "kubelet.conf" kubeconfig file
+[kubeconfig] Writing "controller-manager.conf" kubeconfig file
+[kubeconfig] Writing "scheduler.conf" kubeconfig file
+[control-plane] Using manifest folder "/etc/kubernetes/manifests"
+[control-plane] Creating static Pod manifest for "kube-apiserver"
+[control-plane] Creating static Pod manifest for "kube-controller-manager"
+[control-plane] Creating static Pod manifest for "kube-scheduler"
+[etcd] Creating static Pod manifest for local etcd in "/etc/kubernetes/manifests"
+[wait-control-plane] Waiting for the kubelet to boot up the control plane as static Pods from directory "/etc/kubernetes/manifests". This can take up to 4m0s
+[kubelet-check] Initial timeout of 40s passed.
+[apiclient] All control plane components are healthy after 80.006261 seconds
+[upload-config] storing the configuration used in ConfigMap "kubeadm-config" in the "kube-system" Namespace
+[kubelet] Creating a ConfigMap "kubelet-config-1.14" in namespace kube-system with the configuration for the kubelets in the cluster
+[upload-certs] Skipping phase. Please see --experimental-upload-certs
+[mark-control-plane] Marking the node master as control-plane by adding the label "node-role.kubernetes.io/master=''"
+[mark-control-plane] Marking the node master as control-plane by adding the taints [node-role.kubernetes.io/master:NoSchedule]
+[bootstrap-token] Using token: hhor3h.4b9mfe9du0zof7j4
+[bootstrap-token] Configuring bootstrap tokens, cluster-info ConfigMap, RBAC Roles
+[bootstrap-token] configured RBAC rules to allow Node Bootstrap tokens to post CSRs in order for nodes to get long term certificate credentials
+[bootstrap-token] configured RBAC rules to allow the csrapprover controller automatically approve CSRs from a Node Bootstrap Token
+[bootstrap-token] configured RBAC rules to allow certificate rotation for all node client certificates in the cluster
+[bootstrap-token] creating the "cluster-info" ConfigMap in the "kube-public" namespace
+[addons] Applied essential addon: CoreDNS
+[addons] Applied essential addon: kube-proxy
+
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 192.168.124.143:6443 --token hhor3h.4b9mfe9du0zof7j4 \
+    --discovery-token-ca-cert-hash sha256:61902ba919d5bd22efa9e75acf93af05e875768c8ddb3d7fad4b53f4304876f4 
+]
+此时执行 kubectl get node  结果如下
+The connection to the server localhost:8080 was refused - did you specify the right host or port?  ###填坑此时需要执行
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+11.安装pod 网络插件
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+kubectl get pods -n kube-system  ##查看flannel 是否部署 等部署完毕执行
+kubectl get node      ##此时master 状态为ready
+分别在node01 node02 上面执行下面命令把node节点加入到master集群中
+ kubeadm join 192.168.124.143:6443 --token hhor3h.4b9mfe9du0zof7j4 \
+    --discovery-token-ca-cert-hash sha256:61902ba919d5bd22efa9e75acf93af05e875768c8ddb3d7fad4b53f4304876f4 
+
+12.测试验证：kubectl create deployment nginx --image=nginx  
+kubectl get svc 
+nginx        NodePort    10.98.89.71   <none>        80:32266/TCP   2m36s
+curl 192.168.124.143:3226  或者通过浏览器会出现nginx欢迎界面
+
+13.部署kubernetes-dashboard
+ wget https://raw.githubusercontent.com/kubernetes/dashboard/v1.10.1/src/deploy/recommended/kubernetes-dashboard.yaml  ##国内无法访问镜像源先下载yaml文件
+ 更改镜像源
+        #image: k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.1
+        image: lizhenliang/kubernetes-dashboard-amd64:v1.10.1      ###此处一直找不到镜像，在github上找了一个kubernetes-dashboard-amd64:v1.10.1镜像仓库如果有合适的可以换掉或者pull 到本地
+[kind: Service
 apiVersion: v1
-kind: ReplicationController
 metadata:
-  name: mysql
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
 spec:
-  replicas: 1
+  type: NodePort
+  ports:
+    - port: 443
+      targetPort: 8443
   selector:
-    app: mysql
-  template:
-    metadata:
-      labels:
-        app: mysql
-    spec:
-      containers:
-      - name: mysql
-        image: mysql
-        ports:
-        - containerPort: 3306
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: "123456"
-kuberctl create -f mysql.rc yaml 
+    k8s-app: kubernetes-dashboard
+]
+增加暴露端口
+kubectl apply -f kubernetes-dashboard.yaml  ##启动dashboard
+kubectl get pods,svc -n kube-system   ## 查看dashboard pod 和svc 运行的状态
+
+NAME                           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                  AGE
+service/kube-dns               ClusterIP   10.96.0.10       <none>        53/UDP,53/TCP,9153/TCP   156m
+service/kubernetes-dashboard   NodePort    10.109.176.101   <none>        443:31228/TCP            30m
+通过浏览器打开：
+https://192.168.124.143:31228/#!/login  ### 只有火狐浏览器可以打开 https://www.jianshu.com/p/c6d560d12d50 
+kubectl create serviceaccount dashboard-admin -n kube-system   ##创建serviceaccount 
+kubectl create clusterrolebinding dashboard-admin --clusterrole=cluster-admin --serviceaccount=kube-system:dashboard-admin  
+kubectl get secret -n kube-system |grep admin  ##查看token 存储地址
+dashboard-admin-token-85bdq                      kubernetes.io/service-account-token   3      6m43s
+kubectl describe secret dashboard-admin-token-85bdq -n kube-system  ##通过secret name 查看token 
+Name:         dashboard-admin-token-85bdq
+Namespace:    kube-system
+Labels:       <none>
+Annotations:  kubernetes.io/service-account.name: dashboard-admin
+              kubernetes.io/service-account.uid: db29cf8e-7d86-11e9-86a1-000c299e1622
+
+Type:  kubernetes.io/service-account-token
+
+Data
+====
+ca.crt:     1025 bytes
+namespace:  11 bytes
+token:      eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJkYXNoYm9hcmQtYWRtaW4tdG9rZW4tODViZHEiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoiZGFzaGJvYXJkLWFkbWluIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiZGIyOWNmOGUtN2Q4Ni0xMWU5LTg2YTEtMDAwYzI5OWUxNjIyIiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50Omt1YmUtc3lzdGVtOmRhc2hib2FyZC1hZG1pbiJ9.oDkVutbOgiasg8IbjfEmydunWDKdkIpt1uzNGewWLEtPYm113D-8jDtyg4boJ6s28C7iH-LtvAO_957G6XAdUTB03DygDmEjPEbrWQN38Uw2LqWY5aj7sKTsCXjWvqYKOwaDYlsWajeI3JpR6FBsa6LbCvvgfHSBtXYbKstDu_388FUH0vWB8Ih8QE3AauLeG35FLC3Kl8hATXmqbobMizBlguUj1iXjAEdFYmCUrFpN2RQOTriFFtKAyeJYFAwtaIthnxipwSPchTbEm0zjYGOkwUkMrhbwWQ_HQ90l3jvPWOeBCZp5c-lf0MDtUE9Gk6fDgEZTopYbouXCEAUZ1w
+复制token 值通过令牌验证把token 粘贴上去就进入了dashboard 页面
+部署完成
+
+
 
 
