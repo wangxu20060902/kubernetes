@@ -1,23 +1,41 @@
-https://blog.csdn.net/wfs1994/article/details/86408254  ###参考
-kubernetes 集群二进制安装
+k8s 二进制安装部署
 
-基本环境和角色划分：
-192.168.124.149  k8s-master   etcd、kube-apiserver、kube-controller-manager、kube-scheduler
-192.168.124.151  k8s-node01   etcd、kubelet、docker、kube_proxy
-192.168.124.150  k8s-node02   etcd、kubelet、docker、kube_proxy
+k8s-master ： 192.168.163.174  etcd、kube-apiserver、kube-controller-manager、kube-scheduler、kubelet、kube_proxy
+k8s-node01    192.168.163.172  etcd、kubelet、docker、kube_proxy
+k8s-node02    192.168.163.173  etcd、kubelet、docker、kube_proxy
 
-关闭selinux
+集群环境规划此处忽略【
+#本次集群搭建没有具体制定ip 段 ，建议使用未用的网段来定义服务网段和Pod 网段
+# 服务网段(Service CIDR)，部署前路由不可达，部署后集群内部使用IP:Port可达
+SERVICE_CIDR="10.254.0.0/16"
+# Pod 网段(Cluster CIDR)，部署前路由不可达，部署后路由可达(flanneld 保证)
+CLUSTER_CIDR="172.18.0.0/16"
+
+# kubernetes 服务IP(预先分配，一般为SERVICE_CIDR中的第一个IP)
+CLUSTER_KUBERNETES_SVC_IP="10.254.0.1"
+
+# 集群 DNS 服务IP(从SERVICE_CIDR 中预先分配)
+CLUSTER_DNS_SVC_IP="10.254.0.2"
+
+# flanneld 网络配置前缀
+FLANNEL_ETCD_PREFIX="/kubernetes/network】
+
+1.初始化环境
+yum update -y     ##升级内核
+yum install -y vim wget net-tools bash-completion lrzsz ##安装基础软件
+vim /etc/hostname    ###更改计算机名字
+
+1.1. 设置关闭防火墙及SELINUX
+systemctl stop firewalld && systemctl disable firewalld
 setenforce  0 
 sed -i "s/^SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config
+SELINUX=disabled
 
-关闭firewalld
-systemctl disable firewalld && systemctl stop firewalld
-
-关闭 swap
+1.2. 关闭Swap
 swapoff -a  ##临时关闭
 sed -i 's/.*swap.*/#&/' /etc/fstab 或者vim /etc/fstab  注释掉swap 那一行 ##永久关闭
 
-将桥接的IPV4流量传递到iptables的链
+1.3. 设置系统参数 - 允许路由转发，不对bridge的数据进行处理
 cat << EOF | tee /etc/sysctl.d/k8s.conf
 net.ipv4.ip_forward = 1
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -25,30 +43,40 @@ net.bridge.bridge-nf-call-iptables = 1
 EOF
 sysctl --system
 
-设置docker-ce 阿里云yum源
+1.4.设置docker-ce 阿里云yum源
 wget http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo -O /etc/yum.repos.d/docker-ce.repo
 
-master 上传要部署的角色的压缩包和对应的版本
-etcd-v3.3.10-linux-amd64.tar.gz  
-flannel-v0.10.0-linux-amd64.tar.gz  
-kubernetes-client-linux-amd64.tar.gz  
-kubernetes-node-linux-amd64.tar.gz
+1.5.配置 master节点到node免密 为后面的
+master 上执行 ssh-keygen 一直回车
+ssh-copy-id -i 192.168.163.172
+ssh-copy-id -i 192.168.163.173
+测试：
+ssh 192.168.163.172 登录不需要密码
 
-cfssl安装 
+1.6. 创建安装目录
+mkdir /k8s/etcd/{bin,cfg,ssl} -p
+mkdir /k8s/kubernetes/{bin,cfg,ssl} -p
+
+1.7.安装docker
+yum -y install docker-ce
+systemctl start docker && systemctl enable docker
+
+2.创建CA 证书和密钥
+
+kubernetes 系统各个组件需要使用TLS证书对通信进行加密，这里我们使用CloudFlare的PKI 工具集cfssl 来生成Certificate Authority(CA) 证书和密钥文件， CA 是自签名的证书，
+用来签名后续创建的其他TLS 证书
+2.1.安装 CFSSL
 wget https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
 wget https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
 wget https://pkg.cfssl.org/R1.2/cfssl-certinfo_linux-amd64
 chmod +x cfssl_linux-amd64 cfssljson_linux-amd64 cfssl-certinfo_linux-amd64
-mv cfssl_linux-amd64 /usr/local/bin/cfssl
-mv cfssljson_linux-amd64 /usr/local/bin/cfssljson
-mv cfssl-certinfo_linux-amd64 /usr/bin/cfssl-certinfo
-
-创建etcd证书
-mkdir /k8s/etcd/{bin,cfg,ssl} -p
-mkdir /k8s/kubernetes/{bin,cfg,ssl} -p
+cp cfssl_linux-amd64 /usr/local/bin/cfssl
+cp cfssljson_linux-amd64 /usr/local/bin/cfssljson
+cp cfssl-certinfo_linux-amd64 /usr/bin/cfssl-certinfo
 cd /k8s/etcd/ssl/
 
-etcd ca配置
+2.2 etcd ca配置
+
 cat << EOF | tee ca-config.json
 {
   "signing": {
@@ -70,7 +98,8 @@ cat << EOF | tee ca-config.json
 }
 EOF
 
-etcd ca证书
+2.3 etcd ca证书
+
 cat << EOF | tee ca-csr.json
 {
     "CN": "etcd CA",
@@ -88,14 +117,15 @@ cat << EOF | tee ca-csr.json
 }
 EOF
 
-etcd server证书
+2.4 etcd server证书
+
 cat << EOF | tee server-csr.json
 {
     "CN": "etcd",
     "hosts": [
-    "192.168.124.149",
-    "192.168.124.151",
-    "192.168.124.150"
+    "192.168.163.174",
+    "192.168.163.172",
+    "192.168.163.173"
     ],
     "key": {
         "algo": "rsa",
@@ -111,29 +141,38 @@ cat << EOF | tee server-csr.json
 }
 EOF
 
-生成etcd ca证书和私钥 初始化ca
+2.5 生成etcd ca证书和私钥 初始化ca
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca 
-
 生成server证书
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=etcd server-csr.json | cfssljson -bare server
+copy证书到另外两个node节点
+scp -r /k8s/etcd/ssl/* root@192.168.163.172:$PWD
+scp -r /k8s/etcd/ssl/* root@192.168.163.173:$PW
+scp -r /k8s/etcd/bin/* root@192.168.163.172:/k8s/etcd/bin/
+scp -r /k8s/etcd/bin/* root@192.168.163.173:/k8s/etcd/bin/
 
-etcd安装
-tar zxvf etcd-v3.3.10-linux-amd64.tar.gz
+3 安装etcd
+tar -xvf etcd-v3.3.10-linux-amd64.tar.gz
 cd etcd-v3.3.10-linux-amd64/
 cp etcd etcdctl /k8s/etcd/bin/
+3.1 解压
+tar -xvf etcd-v3.3.10-linux-amd64.tar.gz
+cd etcd-v3.3.10-linux-amd64/
+cp etcd etcdctl /k8s/etcd/bin/
+mkdir /data1/etcd -p
+3.2 配置etcd启动文件
+vim /k8s/etcd/cfg/etcd.conf
 
-配置etcd主文件
-vim /k8s/etcd/cfg/etcd.conf   
 #[Member]
 ETCD_NAME="etcd01"
 ETCD_DATA_DIR="/data1/etcd"
-ETCD_LISTEN_PEER_URLS="https://192.168.124.149:2380"
-ETCD_LISTEN_CLIENT_URLS="https://192.168.124.149:2379"
+ETCD_LISTEN_PEER_URLS="https://192.168.163.174:2380"
+ETCD_LISTEN_CLIENT_URLS="https://192.168.163.174:2379"
  
 #[Clustering]
-ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.124.149:2380"
-ETCD_ADVERTISE_CLIENT_URLS="https://192.168.124.149:2379"
-ETCD_INITIAL_CLUSTER="etcd01=https://192.168.124.149:2380,etcd02=https://192.168.124.151:2380,etcd03=https://192.168.124.150:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.163.174:2380"
+ETCD_ADVERTISE_CLIENT_URLS="https://192.168.163.174:2379"
+ETCD_INITIAL_CLUSTER="etcd01=https://192.168.163.174:2380,etcd02=https://192.168.163.172:2380,etcd03=https://192.168.163.173:2380"
 ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
 ETCD_INITIAL_CLUSTER_STATE="new"
 
@@ -147,11 +186,8 @@ ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
 ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
 ETCD_PEER_CLIENT_CERT_AUTH="true"
 
-
-配置etcd启动文件
-mkdir /data1/etcd -p
+3.3 配置etcd启动文件
 vim /usr/lib/systemd/system/etcd.service
-
 
 [Unit]
 Description=Etcd Server
@@ -171,23 +207,18 @@ LimitNOFILE=65536
 [Install]
 WantedBy=multi-user.target
 
-启动 注意启动前k8s-node01、k8s-node02同样配置下
-scp -r /k8s root@192.168.124.151:/
-scp -r /k8s root@192.168.124.150:/
-scp /usr/lib/systemd/system/etcd.service  root@192.168.124.151:/usr/lib/systemd/system/
-scp /usr/lib/systemd/system/etcd.service  root@192.168.124.150:/usr/lib/systemd/system/
-然后编辑vim vim /k8s/etcd/cfg/etcd.conf  主要更改ip地址和ETCD_NAME 根据自己具体情况更改
-启动在master  node 节点执行下列命令：
-systemctl daemon-reload
-systemctl enable etcd
-systemctl start etcd
+3.4验证etcd 集群状态
+/k8s/etcd/bin/etcdctl --ca-file=/k8s/etcd/ssl/ca.pem --cert-file=/k8s/etcd/ssl/server.pem --key-file=/k8s/etcd/ssl/server-key.pem --endpoints="https://192.168.163.172:2379,https://192.168.163.172:2379,https://192.168.163.172:2379" cluster-health
+member 3b93701df2196701 is healthy: got healthy result from https://192.168.163.174:2379
+member 7dc32c724c1dd6b0 is healthy: got healthy result from https://192.168.163.173:2379
+member 80996ce09e4d308e is healthy: got healthy result from https://192.168.163.172:2379
+cluster is healthy
+etcd集群搭建成功
 
-etcd服务检查 
-/k8s/etcd/bin/etcdctl --ca-file=/k8s/etcd/ssl/ca.pem --cert-file=/k8s/etcd/ssl/server.pem --key-file=/k8s/etcd/ssl/server-key.pem --endpoints="https://192.168.124.149:2379,https://192.168.124.151:2379,https://192.168.124.150:2379" cluster-health
-
-生成kubernets证书与私钥
-制作kubernetes ca证书
+4 生成kubernets证书与私钥
+4.1 制作kubernetes ca证书
 cd /k8s/kubernetes/ssl
+
 cat << EOF | tee ca-config.json
 {
   "signing": {
@@ -228,19 +259,20 @@ cat << EOF | tee ca-csr.json
 }
 EOF
 
-生成证书
+生成ca证书
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca -
 
-制作apiserver证书
+4.2 制作apiserver证书
+
 cat << EOF | tee server-csr.json
 {
     "CN": "kubernetes",
     "hosts": [
       "10.254.0.1",
       "127.0.0.1",
-      "192.168.124.149",
-      "192.168.124.151",
-      "192.168.124.150",
+      "192.168.163.174",
+      "192.168.163.172",
+      "192.168.163.173",
       "kubernetes",
       "kubernetes.default",
       "kubernetes.default.svc",
@@ -262,10 +294,12 @@ cat << EOF | tee server-csr.json
     ]
 }
 EOF
-生成证书
+
+生成server 证书
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes server-csr.json | cfssljson -bare server
 
-制作kube-proxy证书
+4.3 制作kube-proxy证书
+
 cat << EOF | tee kube-proxy-csr.json
 {
   "CN": "system:kube-proxy",
@@ -285,30 +319,37 @@ cat << EOF | tee kube-proxy-csr.json
   ]
 }
 EOF
-生产证书
+
+生成证书kube proxy 证书
 cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-proxy-csr.json | cfssljson -bare kube-proxy
 
+5 部署kubernetes server
+kubernetes master 节点运行如下组件： kube-apiserver kube-scheduler kube-controller-manager kube-scheduler 和 kube-controller-manager 可以以集群模式运行，
+通过 leader 选举产生一个工作进程，其它进程处于阻塞模式，master三节点高可用模式下可用
+5.1 上传或下载解压文件
+tar -zxvf kubernetes-server-linux-amd64.tar.gz 
+cd kubernetes/server/bin/
+cp kube-scheduler kube-apiserver kube-controller-manager kubectl kube-proxy /k8s/kubernetes/bin/
 
-部署kubernetes server
-
-tar zxvf kubernetes-server-linux-amd64.tar.gz
-cd kubernetes/server/bin/ 
-cp kube-scheduler kube-apiserver kube-controller-manager kubectl /k8s/kubernetes/bin/
-
-部署kube-apiserver组件 创建TLS Bootstrapping Token
+5.2 部署kube-apiserver组件 创建TLS Bootstrapping Token
 head -c 16 /dev/urandom | od -An -t x | tr -d ' '
-f75e4e4b4a2527f296a5105826420440
-vim /k8s/kubernetes/cfg/token.csv
-f75e4e4b4a2527f296a5105826420440,kubelet-bootstrap,10001,"system:kubelet-bootstrap"
 
-创建Apiserver配置文件
+2782c3896bc617c6b9dd85d71197767a
+
+vim /k8s/kubernetes/cfg/token.csv
+
+2782c3896bc617c6b9dd85d71197767a,kubelet-bootstrap,10001,"system:kubelet-bootstrap"
+
+5.3 创建Apiserver配置文件
+
 vim /k8s/kubernetes/cfg/kube-apiserver
+
 KUBE_APISERVER_OPTS="--logtostderr=true \
 --v=4 \
---etcd-servers=https://192.168.124.149:2379,https://192.168.124.151:2379,https://192.168.124.150:2379 \
---bind-address=192.168.124.149 \
+--etcd-servers=https://192.168.163.174:2379,https://192.168.163.172:2379,https://192.168.163.173:2379 \
+--bind-address=192.168.163.174 \
 --secure-port=6443 \
---advertise-address=192.168.124.149 \
+--advertise-address=192.168.163.174 \
 --allow-privileged=true \
 --service-cluster-ip-range=10.254.0.0/16 \
 --enable-admission-plugins=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota,NodeRestriction \
@@ -323,9 +364,10 @@ KUBE_APISERVER_OPTS="--logtostderr=true \
 --etcd-cafile=/k8s/etcd/ssl/ca.pem \
 --etcd-certfile=/k8s/etcd/ssl/server.pem \
 --etcd-keyfile=/k8s/etcd/ssl/server-key.pem"
+5.4 创建apiserver systemd文件
 
-创建apiserver systemd文件
 vim /usr/lib/systemd/system/kube-apiserver.service 
+
 [Unit]
 Description=Kubernetes API Server
 Documentation=https://github.com/kubernetes/kubernetes
@@ -338,26 +380,31 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 
-启动服务kube-apiserver
+5.5启动服务kube-apiserver
 systemctl daemon-reload
 systemctl enable kube-apiserver
 systemctl start kube-apiserver
 查看服务装态
 systemctl status kube-apiserver
 ps -ef |grep kube-apiserver
-netstat -tulpn |grep kube-apiserve
+netstat -tlpn |grep kube-apiserve
 
-部署kube-scheduler组件 创建kube-scheduler配置文件
+6 部署kube-scheduler组件 
+6.1 创建kube-scheduler配置文件
+
 vim  /k8s/kubernetes/cfg/kube-scheduler
+
+KUBE_SCHEDULER_OPTS="--logtostderr=true --v=4 --master=127.0.0.1:8080 --leader-elect"
 
 参数备注：
  –address：在 127.0.0.1:10251 端口接收 http /metrics 请求；kube-scheduler 目前还不支持接收 https 请求；
  –kubeconfig：指定 kubeconfig 文件路径，kube-scheduler 使用它连接和验证 kube-apiserver；
  –leader-elect=true：集群运行模式，启用选举功能；被选为 leader 的节点负责处理工作，其它节点为阻塞状态；
- 
- 创建kube-scheduler systemd文件
- vim /usr/lib/systemd/system/kube-scheduler.service 
- [Unit]
+6.2  创建kube-scheduler systemd文件
+
+vim /usr/lib/systemd/system/kube-scheduler.service 
+
+[Unit]
 Description=Kubernetes Scheduler
 Documentation=https://github.com/kubernetes/kubernetes
  
@@ -369,7 +416,7 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 
-启动服务kube-kube-scheduler
+6.3启动服务kube-kube-scheduler
 systemctl daemon-reload
 systemctl enable kube-scheduler.service 
 systemctl start kube-scheduler.service
@@ -378,7 +425,9 @@ systemctl status kube-scheduler.service
 ps -ef|grep kube-scheduler
 netstat | grep kube-scheduler
 
-部署kube-controller-manager组件 创建kube-controller-manager配置文件
+7 部署kube-controller-manager组件 
+7.1 创建kube-controller-manager配置文件
+
 vim /k8s/kubernetes/cfg/kube-controller-manager
 
 KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
@@ -393,7 +442,8 @@ KUBE_CONTROLLER_MANAGER_OPTS="--logtostderr=true \
 --root-ca-file=/k8s/kubernetes/ssl/ca.pem \
 --service-account-private-key-file=/k8s/kubernetes/ssl/ca-key.pem"
 
-创建kube-controller-manager systemd文件
+7.2 创建kube-controller-manager systemd文件
+
 vim /usr/lib/systemd/system/kube-controller-manager.service 
  
 [Unit]
@@ -408,24 +458,28 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 
-启动服务kube-controller-manager
+7.3 启动服务kube-controller-manager
 systemctl daemon-reload
 systemctl enable kube-controller-manager.service
 systemctl start kube-controller-manager.service
- 
-验证kubeserver服务
-设置环境变量
-vim /etc/profile
-PATH=/k8s/kubernetes/bin:$PATH
+
+7.4 将可执行文件添加到 PATH 变量中
+
+echo "export PATH=$PATH:/k8s/kubernetes/bin/" >>/etc/profile
 source /etc/profile
-查看master服务状态
 
-Node部署
-安装docker
-yum install docker-ce -y
-systemctl start docker && systemctl enable docker
+7.5 查看master服务状态 状态正常
+kubectl get cs
+controller-manager   Healthy   ok                  
+scheduler            Healthy   ok                  
+etcd-2               Healthy   {"health":"true"}   
+etcd-0               Healthy   {"health":"true"}   
+etcd-1               Healthy   {"health":"true"}
 
-5.2 部署kubelet组件
+
+8 node 节点部署kubelet
+
+8.1 部署kubelet组件
 kublet 运行在每个 worker 节点上，接收 kube-apiserver 发送的请求，管理 Pod 容器，执行交互式命令，
 如exec、run、logs 等; kublet 启动时自动向 kube-apiserver 注册节点信息，内置的 cadvisor 统计和监控节点的资源使用情况;
 为确保安全，只开启接收 https 请求的安全端口，对请求进行认证和授权，拒绝未授权的访问(如apiserver、heapster)
@@ -434,17 +488,16 @@ tar zxvf kubernetes-node-linux-amd64.tar.gz
 cd kubernetes/node/bin/
 cp kube-proxy kubelet kubectl /k8s/kubernetes/bin/
 
-复制相关证书到node节点
-scp *.pem root@192.168.124.150:$PWD
-scp *.pem root@192.168.124.151:$PWD
+复制相关证书到每个node节点
+cd /k8s/kubernetes/ssl/
+scp *.pem root@192.168.163.172:$PWD
+scp *.pem root@192.168.163.173:$PWD
 
-创建kubelet bootstrap kubeconfig文件 通过脚本实现
+8.2 创建kubelet bootstrap kubeconfig文件 通过脚本实现
+
 vim /k8s/kubernetes/cfg/environment.sh
-
-#!/bin/bash
-#创建kubelet bootstrapping kubeconfig 
-BOOTSTRAP_TOKEN=f75e4e4b4a2527f296a5105826420440
-KUBE_APISERVER="https://192.168.124.149:6443"
+BOOTSTRAP_TOKEN=2782c3896bc617c6b9dd85d71197767a
+KUBE_APISERVER="https://192.168.163.174:6443"
 #设置集群参数
 kubectl config set-cluster kubernetes \
   --certificate-authority=/k8s/kubernetes/ssl/ca.pem \
@@ -486,17 +539,23 @@ kubectl config set-context default \
   --cluster=kubernetes \
   --user=kube-proxy \
   --kubeconfig=kube-proxy.kubeconfig
- 
- 执行脚本前做的工作
+
+kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+
+
+执行脚本前做的工作
 chmod 755 environment.sh
 cp /root/kubernetes/node/bin/kubectl /usr/local/sbin/
 sh environment.sh
+ls /k8s/kubernetes/cfg/ 
+bootstrap.kubeconfig  environment.sh  kube-proxy.kubeconfig
 
-创建kubelet参数配置模板文件
+8.3 创建kubelet参数配置模板文件
 vim /k8s/kubernetes/cfg/kubelet.config
+
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
-address: 192.168.124.151
+address: 192.168.163.174
 port: 10250
 readOnlyPort: 10255
 cgroupDriver: cgroupfs
@@ -506,20 +565,22 @@ failSwapOn: false
 authentication:
   anonymous:
     enabled: true
-	
-创建kubelet配置文件
+
+8.4 创建kubelet配置文件
+
 vim /k8s/kubernetes/cfg/kubelet
 
 KUBELET_OPTS="--logtostderr=true \
 --v=4 \
---hostname-override=192.168.124.151 \
+--hostname-override=192.168.163.174 \
 --kubeconfig=/k8s/kubernetes/cfg/kubelet.kubeconfig \
 --bootstrap-kubeconfig=/k8s/kubernetes/cfg/bootstrap.kubeconfig \
 --config=/k8s/kubernetes/cfg/kubelet.config \
 --cert-dir=/k8s/kubernetes/ssl \
 --pod-infra-container-image=registry.cn-hangzhou.aliyuncs.com/google-containers/pause-amd64:3.0"
 
-创建kubelet systemd文件
+8.5 创建kubelet systemd文件
+
 vim /usr/lib/systemd/system/kubelet.service 
  
 [Unit]
@@ -536,39 +597,60 @@ KillMode=process
 [Install]
 WantedBy=multi-user.target
 
-将kubelet-bootstrap用户绑定到系统集群角色
+8.6 将kubelet-bootstrap用户绑定到系统集群角色
 在master 主机上操作
 kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper  --user=kubelet-bootstrap
 
-启动服务 
+8.7 启动服务 
 systemctl daemon-reload 
 systemctl enable kubelet.service 
 systemctl start  kubelet.service
 查看kubelet 状态
 systemctl status kubelet.service
 
-#############################################
-Master接受kubelet CSR请求 可以手动或自动 approve CSR 请求。推荐使用自动的方式，因为从 v1.8 版本开始，
-可以自动轮转approve csr 后生成的证书，如下是手动 approve CSR请求操作方法 查看CSR列表
-在master 节点上执行如下
-kubectl get csr
-kubectl certificate approve node-csr-r5XuCBIZfTN8xJ-yiKBupf99VziCoJaYUIE6P_7lOEE
-kubectl get csr
-#############################################
 
-部署kube-proxy组件
-kube-proxy 运行在所有 node节点上，它监听 apiserver 中 service 和 Endpoint 的变化情况，创建路由规则来进行服务负载均衡 1）创建 kube-proxy 配置文件
+在node1 和node2 上部署kubelet
+
+scp kubelet kubelet.config kube-proxy.kubeconfig bootstrap.kubeconfig root@192.168.163.172:/k8s/kubernetes/cfg/
+scp kubelet kubelet.config kube-proxy.kubeconfig bootstrap.kubeconfig root@192.168.163.173:/k8s/kubernetes/cfg/
+scp /usr/lib/systemd/system/kubelet.service root@192.168.163.172:/usr/lib/systemd/system/
+scp /usr/lib/systemd/system/kubelet.service root@192.168.163.172:/usr/lib/systemd/system/
+更改对应的ip地址
+启动服务systemctl daemon-reload 
+systemctl enable kubelet.service 
+systemctl start  kubelet.service
+
+8.7Master接受kubelet CSR请求 可以手动或自动 approve CSR 请求。推荐使用自动的方式，因为从 v1.8 版本开始，可以自动轮转approve csr 后生成的证书，
+如下是手动 approve CSR请求操作方法 查看CSR列表
+kubectl get csr
+node-csr-6UQR8VaVzR7fgPIkcMbr3f8CFv7GIt_elraEsxr60jk   155m   kubelet-bootstrap   Pending
+node-csr-Sy-M1a9_EYfv7G5PxSvQ3p0_Ov00tCuih700CqS1ws0   168m   kubelet-bootstrap   Pending
+node-csr-TqjQxRiIg9CMMnoOLrwE7R9q7CT9VUCyiQaniWrR7EE   155m   kubelet-bootstrap   Pending
+接受node
+kubectl certificate approve  node-csr-6UQR8VaVzR7fgPIkcMbr3f8CFv7GIt_elraEsxr60jk
+kubectl certificate approve  node-csr-Sy-M1a9_EYfv7G5PxSvQ3p0_Ov00tCuih700CqS1ws0
+kubectl certificate approve  node-csr-TqjQxRiIg9CMMnoOLrwE7R9q7CT9VUCyiQaniWrR7EE
+
+kubectl get nodes
+NAME              STATUS   ROLES    AGE   VERSION
+192.168.163.172   Ready    <none>   70s   v1.13.0
+192.168.163.173   Ready    <none>   24s   v1.13.0
+192.168.163.174   Ready    <none>   42s   v1.13.0
+
+9 部署kube-proxy组件
+kube-proxy 运行在所有 node节点上，它监听 apiserver 中 service 和 Endpoint 的变化情况，创建路由规则来进行服务负载均衡 
+9.1 创建 kube-proxy 配置文件
 vim /k8s/kubernetes/cfg/kube-proxy
 
 KUBE_PROXY_OPTS="--logtostderr=true \
 --v=4 \
---hostname-override=192.168.124.151 \
+--hostname-override=192.168.163.174 \
 --cluster-cidr=10.254.0.0/16 \
 --kubeconfig=/k8s/kubernetes/cfg/kube-proxy.kubeconfig"
 
-创建kube-proxy systemd文件
+9.2 创建kube-proxy systemd文件
 vim /usr/lib/systemd/system/kube-proxy.service 
- 
+
 [Unit]
 Description=Kubernetes Proxy
 After=network.target
@@ -588,24 +670,26 @@ systemctl start kube-proxy.service
 查看状态
 systemctl status kube-proxy.service
 
-Flanneld网络部署
+10 Flanneld网络部署
 默认没有flanneld网络，Node节点间的pod不能通信，只能Node内通信，为了部署步骤简洁明了，故flanneld放在后面安装 flannel服务需要先于docker启动。
 flannel服务启动时主要做了以下几步的工作： 从etcd中获取network的配置信息 划分subnet，并在etcd中进行注册 将子网信息记录到/run/flannel/subnet.env中
-etcd注册网段
-/k8s/etcd/bin/etcdctl --ca-file=/k8s/etcd/ssl/ca.pem --cert-file=/k8s/etcd/ssl/server.pem --key-file=/k8s/etcd/ssl/server-key.pem --endpoints="https://192.168.124.149:2379,https://192.168.124.151:2379,https://192.168.124.150:2379"  set /k8s/network/config  '{ "Network": "10.254.0.0/16", "Backend": {"Type": "vxlan"}}'
+10.1 etcd注册网段
 
-{ "Network": "10.254.0.0/16", "Backend": {"Type": "vxlan"}}
+/k8s/etcd/bin/etcdctl --ca-file=/k8s/etcd/ssl/ca.pem --cert-file=/k8s/etcd/ssl/server.pem --key-file=/k8s/etcd/ssl/server-key.pem --endpoints="https://192.168.163.174:2379,https://192.168.163.174:2379,https://192.168.163.174:2379"  set /k8s/network/config  '{ "Network": "10.254.0.0/16", "Backend": {"Type": "vxlan"}}'
 
 flanneld 当前版本 (v0.10.0) 不支持 etcd v3，故使用 etcd v2 API 写入配置 key 和网段数据； 写入的 Pod 网段 ${CLUSTER_CIDR} 必须是 /16 段地址，必须与 kube-controller-manager 的 –cluster-cidr 参数值一致；
 
-flannel安装
-解压安装
-tar -xvf flannel-v0.10.0-linux-amd64.tar.gz
-cp mk-docker-opts.sh /k8s/kubernetes/bin/
-配置flannel
+10.2 flannel安装 上传或下载解压文件
+
+tar zxvf flannel-v0.10.0-linux-amd64.tar.gz
+mv flanneld mk-docker-opts.sh /k8s/kubernetes/bin/
+
+10.3 配置flanneld
 vim /k8s/kubernetes/cfg/flanneld
-FLANNEL_OPTIONS="--etcd-endpoints=https://192.168.124.149:2379,https://192.168.124.150:2379,https://192.168.124.149:2379 -etcd-cafile=/k8s/etcd/ssl/ca.pem -etcd-certfile=/k8s/etcd/ssl/server.pem -etcd-keyfile=/k8s/etcd/ssl/server-key.pem -etcd-prefix=/k8s/network"
-创建flanneld systemd文件
+
+FLANNEL_OPTIONS="--etcd-endpoints=https://192.168.163.174:2379,https://192.168.163.174:2379,https://192.168.163.174:2379 -etcd-cafile=/k8s/etcd/ssl/ca.pem -etcd-certfile=/k8s/etcd/ssl/server.pem -etcd-keyfile=/k8s/etcd/ssl/server-key.pem -etcd-prefix=/k8s/network"
+
+10.4 创建flanneld systemd文件
 vim /usr/lib/systemd/system/flanneld.service
 
 [Unit]
@@ -624,11 +708,12 @@ Restart=on-failure
 WantedBy=multi-user.target
 
 mk-docker-opts.sh 脚本将分配给 flanneld 的 Pod 子网网段信息写入 /run/flannel/docker 文件，后续 docker 启动时 使用这个文件中的环境变量配置 docker0 网桥；
- flanneld 使用系统缺省路由所在的接口与其它节点通信，对于有多个网络接口（如内网和公网）的节点，可以用 -iface 参数指定通信接口; flanneld 运行时需要 root 权限
- 
-vim /usr/lib/systemd/system/docker.service 
+flanneld 使用系统缺省路由所在的接口与其它节点通信，对于有多个网络接口（如内网和公网）的节点，可以用 -iface 参数指定通信接口; flanneld 运行时需要 root 权限；
 
- [Unit]
+10.5 配置Docker启动指定子网 修改EnvironmentFile=/run/flannel/subnet.env，ExecStart=/usr/bin/dockerd $DOCKER_NETWORK_OPTIONS 即可
+vim /usr/lib/systemd/system/docker.service
+
+[Unit]
 Description=Docker Application Container Engine
 Documentation=https://docs.docker.com
 After=network-online.target firewalld.service
@@ -652,9 +737,46 @@ StartLimitInterval=60s
 [Install]
 WantedBy=multi-user.target
 
- 验证服务
- cat /run/flannel/subnet.env
- ip addr
- master 执行：
- kubectl get nodes
+把 flanneld  flanneld.service docker.service 文件分别copy 到另外两个node上
+10.6 启动服务 注意启动flannel前要关闭docker及相关的kubelet这样flannel才会覆盖docker0网桥
+systemctl daemon-reload
+systemctl stop docker
+systemctl start flanneld
+systemctl enable flanneld
+systemctl start docker
+systemctl restart kubelet
+systemctl restart kube-proxy
+
+验证:
+ cat /run/flannel/subnet.env 
+ DOCKER_OPT_BIP="--bip=10.254.45.1/24"
+DOCKER_OPT_IPMASQ="--ip-masq=false"
+DOCKER_OPT_MTU="--mtu=1450"
+DOCKER_NETWORK_OPTIONS=" --bip=10.254.45.1/24 --ip-masq=false --mtu=1450"
+
+ip addr 
+
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:0c:29:78:f1:7e brd ff:ff:ff:ff:ff:ff
+    inet 192.168.163.173/24 brd 192.168.163.255 scope global noprefixroute dynamic ens33
+       valid_lft 1478sec preferred_lft 1478sec
+    inet6 fe80::155f:9ee3:a8ab:fdce/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:a7:32:f2:5c brd ff:ff:ff:ff:ff:ff
+    inet 10.254.45.1/24 brd 10.254.45.255 scope global docker0
+       valid_lft forever preferred_lft forever
+4: flannel.1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UNKNOWN group default 
+    link/ether 66:61:39:ca:01:31 brd ff:ff:ff:ff:ff:ff
+    inet 10.254.45.0/32 scope global flannel.1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6461:39ff:feca:131/64 scope link 
+       valid_lft forever preferred_lft forever
  
+至此整个集群搭建成功
