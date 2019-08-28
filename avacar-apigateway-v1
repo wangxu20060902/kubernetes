@@ -1,0 +1,611 @@
+#########################################################################################################################################################
+service
+#########################################################################################################################################################
+
+{
+  "kind": "Service",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "apigateway-slb",
+    "namespace": "avacar",
+    "selfLink": "/api/v1/namespaces/avacar/services/apigateway-slb",
+    "uid": "347f707e-41ef-11e8-b1a9-00163e04deea",
+    "resourceVersion": "3038655",
+    "creationTimestamp": "2018-04-17T03:27:06Z",
+    "labels": {
+      "k8s-app": "avacar-apigateway-v1"
+    }
+  },
+  "spec": {
+    "ports": [
+      {
+        "protocol": "TCP",
+        "port": 80,
+        "targetPort": 8080,
+        "nodePort": 30927
+      }
+    ],
+    "selector": {
+      "k8s-app": "avacar-apigateway-v1"
+    },
+    "clusterIP": "10.31.4.187",
+    "type": "LoadBalancer",
+    "sessionAffinity": "None",
+    "externalTrafficPolicy": "Cluster"
+  },
+  "status": {
+    "loadBalancer": {
+      "ingress": [
+        {
+          "ip": "106.15.161.119"
+        }
+      ]
+    }
+  }
+}
+
+#########################################################################################################################################################
+pod
+#########################################################################################################################################################
+{
+  "kind": "Pod",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "avacar-apigateway-v1-6fb94fc575-75xcv",
+    "generateName": "avacar-apigateway-v1-6fb94fc575-",
+    "namespace": "avacar",
+    "selfLink": "/api/v1/namespaces/avacar/pods/avacar-apigateway-v1-6fb94fc575-75xcv",
+    "uid": "fdd5f75b-c7d2-11e9-9c2f-00163e061600",
+    "resourceVersion": "109751875",
+    "creationTimestamp": "2019-08-26T07:27:42Z",
+    "labels": {
+      "k8s-app": "avacar-apigateway-v1",
+      "pod-template-hash": "2965097131"
+    },
+    "ownerReferences": [
+      {
+        "apiVersion": "extensions/v1beta1",
+        "kind": "ReplicaSet",
+        "name": "avacar-apigateway-v1-6fb94fc575",
+        "uid": "bda29441-c3bd-11e9-9c2f-00163e061600",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  },
+  "spec": {
+    "volumes": [
+      {
+        "name": "tmp-volume-1",
+        "emptyDir": {}
+      },
+      {
+        "name": "default-token-kc6w6",
+        "secret": {
+          "secretName": "default-token-kc6w6",
+          "defaultMode": 420
+        }
+      }
+    ],
+    "containers": [
+      {
+        "name": "avacar-apigateway-v1",
+        "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1:0.17.3",
+        "env": [
+          {
+            "name": "GC_MAX_METASPACE_SIZE",
+            "value": "400"
+          },
+          {
+            "name": "security_user_name",
+            "value": "avacar"
+          },
+          {
+            "name": "security_user_password",
+            "value": "Admin@svwsc"
+          },
+          {
+            "name": "encrypt_keyStore_pwd",
+            "value": "Admin@svwsc"
+          },
+          {
+            "name": "zuul_host_maxPerRouteConnections",
+            "value": "1000"
+          },
+          {
+            "name": "zuul_host_maxTotalConnections",
+            "value": "2000"
+          },
+          {
+            "name": "zuul_semaphore_maxSemaphores",
+            "value": "1000"
+          },
+          {
+            "name": "rabbitmq_host",
+            "value": "172.20.0.237"
+          },
+          {
+            "name": "rabbitmq_port",
+            "value": "5672"
+          },
+          {
+            "name": "rabbitmq_username",
+            "value": "rabbit"
+          },
+          {
+            "name": "rabbitmq_password",
+            "value": "rabbit"
+          },
+          {
+            "name": "JAVA_OPTIONS",
+            "value": "-Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+          }
+        ],
+        "resources": {
+          "limits": {
+            "cpu": "2",
+            "memory": "3Gi"
+          },
+          "requests": {
+            "cpu": "500m",
+            "memory": "2Gi"
+          }
+        },
+        "volumeMounts": [
+          {
+            "name": "tmp-volume-1",
+            "mountPath": "/tmp"
+          },
+          {
+            "name": "default-token-kc6w6",
+            "readOnly": true,
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
+          }
+        ],
+        "readinessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 30,
+          "timeoutSeconds": 5,
+          "periodSeconds": 10,
+          "successThreshold": 1,
+          "failureThreshold": 5
+        },
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "imagePullPolicy": "Always",
+        "securityContext": {
+          "privileged": false
+        }
+      }
+    ],
+    "restartPolicy": "Always",
+    "terminationGracePeriodSeconds": 30,
+    "dnsPolicy": "ClusterFirst",
+    "serviceAccountName": "default",
+    "serviceAccount": "default",
+    "nodeName": "cn-shanghai.i-uf6gb2498ykuzoz6dx5s",
+    "securityContext": {},
+    "imagePullSecrets": [
+      {
+        "name": "ali-registry"
+      }
+    ],
+    "schedulerName": "default-scheduler",
+    "tolerations": [
+      {
+        "key": "node.kubernetes.io/not-ready",
+        "operator": "Exists",
+        "effect": "NoExecute",
+        "tolerationSeconds": 300
+      },
+      {
+        "key": "node.kubernetes.io/unreachable",
+        "operator": "Exists",
+        "effect": "NoExecute",
+        "tolerationSeconds": 300
+      }
+    ]
+  },
+  "status": {
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Initialized",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-08-26T07:27:42Z"
+      },
+      {
+        "type": "Ready",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-08-26T07:28:36Z"
+      },
+      {
+        "type": "PodScheduled",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-08-26T07:27:42Z"
+      }
+    ],
+    "hostIP": "172.20.0.29",
+    "podIP": "10.30.3.111",
+    "startTime": "2019-08-26T07:27:42Z",
+    "containerStatuses": [
+      {
+        "name": "avacar-apigateway-v1",
+        "state": {
+          "running": {
+            "startedAt": "2019-08-26T07:27:43Z"
+          }
+        },
+        "lastState": {},
+        "ready": true,
+        "restartCount": 0,
+        "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1:0.17.3",
+        "imageID": "docker-pullable://registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1@sha256:98832e0c8f3fe67f2e034f3050d67e940c818b3e77a6a0088db8c46489955f3d",
+        "containerID": "docker://6619f88016ec824e4cb203145a4646653963c8cd3318eb5278f2efd719dc6f3f"
+      }
+    ],
+    "qosClass": "Burstable"
+  }
+}
+
+
+#########################################################################################################################################################
+deployment
+#########################################################################################################################################################
+{
+  "kind": "Deployment",
+  "apiVersion": "extensions/v1beta1",
+  "metadata": {
+    "name": "avacar-apigateway-v1",
+    "namespace": "avacar",
+    "selfLink": "/apis/extensions/v1beta1/namespaces/avacar/deployments/avacar-apigateway-v1",
+    "uid": "a1022882-36fc-11e8-869b-00163e041622",
+    "resourceVersion": "109751879",
+    "generation": 141,
+    "creationTimestamp": "2018-04-03T05:05:29Z",
+    "labels": {
+      "k8s-app": "avacar-apigateway-v1"
+    },
+    "annotations": {
+      "deployment.kubernetes.io/revision": "38",
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"extensions/v1beta1\",\"kind\":\"Deployment\",\"metadata\":{\"annotations\":{},\"labels\":{\"k8s-app\":\"avacar-apigateway-v1\"},\"name\":\"avacar-apigateway-v1\",\"namespace\":\"avacar\"},\"spec\":{\"progressDeadlineSeconds\":600,\"replicas\":1,\"revisionHistoryLimit\":10,\"selector\":{\"matchLabels\":{\"k8s-app\":\"avacar-apigateway-v1\"}},\"strategy\":{\"rollingUpdate\":{\"maxSurge\":\"25%\",\"maxUnavailable\":\"25%\"},\"type\":\"RollingUpdate\"},\"template\":{\"metadata\":{\"labels\":{\"k8s-app\":\"avacar-apigateway-v1\"},\"name\":\"avacar-apigateway-v1\"},\"spec\":{\"containers\":[{\"command\":null,\"env\":[{\"name\":\"JAVA_OPTIONS\",\"value\":\"-Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8\"},{\"name\":\"GC_MAX_METASPACE_SIZE\",\"value\":\"400\"},{\"name\":\"security_user_name\",\"value\":\"avacar\"},{\"name\":\"security_user_password\",\"value\":\"Admin@svwsc\"},{\"name\":\"rabbitmq_host\",\"value\":\"172.20.0.237\"},{\"name\":\"rabbitmq_port\",\"value\":\"5672\"},{\"name\":\"rabbitmq_username\",\"value\":\"rabbit\"},{\"name\":\"rabbitmq_password\",\"value\":\"rabbit\"},{\"name\":\"encrypt_keyStore_pwd\",\"value\":\"Admin@svwsc\"},{\"name\":\"zuul_host_maxPerRouteConnections\",\"value\":\"1000\"},{\"name\":\"zuul_host_maxTotalConnections\",\"value\":\"2000\"},{\"name\":\"zuul_semaphore_maxSemaphores\",\"value\":\"1000\"}],\"image\":\"registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1:0.17.3\",\"imagePullPolicy\":\"Always\",\"name\":\"avacar-apigateway-v1\",\"readinessProbe\":{\"failureThreshold\":5,\"httpGet\":{\"path\":\"/health\",\"port\":8080,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":30,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":5},\"resources\":{\"limits\":{\"cpu\":2,\"memory\":\"3Gi\"},\"requests\":{\"cpu\":\"500m\",\"memory\":\"2Gi\"}},\"securityContext\":{\"privileged\":false},\"terminationMessagePath\":\"/dev/termination-log\",\"terminationMessagePolicy\":\"File\",\"volumeMounts\":[{\"mountPath\":\"/tmp\",\"name\":\"tmp-volume-1\"}]}],\"dnsPolicy\":\"ClusterFirst\",\"imagePullSecrets\":[{\"name\":\"ali-registry\"}],\"restartPolicy\":\"Always\",\"schedulerName\":\"default-scheduler\",\"securityContext\":{},\"terminationGracePeriodSeconds\":30,\"volumes\":[{\"emptyDir\":{},\"name\":\"tmp-volume-1\"}]}}}}\n"
+    }
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "k8s-app": "avacar-apigateway-v1"
+      }
+    },
+    "template": {
+      "metadata": {
+        "name": "avacar-apigateway-v1",
+        "creationTimestamp": null,
+        "labels": {
+          "k8s-app": "avacar-apigateway-v1"
+        }
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "tmp-volume-1",
+            "emptyDir": {}
+          }
+        ],
+        "containers": [
+          {
+            "name": "avacar-apigateway-v1",
+            "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1:0.17.3",
+            "env": [
+              {
+                "name": "GC_MAX_METASPACE_SIZE",
+                "value": "400"
+              },
+              {
+                "name": "security_user_name",
+                "value": "avacar"
+              },
+              {
+                "name": "security_user_password",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "encrypt_keyStore_pwd",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "zuul_host_maxPerRouteConnections",
+                "value": "1000"
+              },
+              {
+                "name": "zuul_host_maxTotalConnections",
+                "value": "2000"
+              },
+              {
+                "name": "zuul_semaphore_maxSemaphores",
+                "value": "1000"
+              },
+              {
+                "name": "rabbitmq_host",
+                "value": "172.20.0.237"
+              },
+              {
+                "name": "rabbitmq_port",
+                "value": "5672"
+              },
+              {
+                "name": "rabbitmq_username",
+                "value": "rabbit"
+              },
+              {
+                "name": "rabbitmq_password",
+                "value": "rabbit"
+              },
+              {
+                "name": "JAVA_OPTIONS",
+                "value": "-Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "3Gi"
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "2Gi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "tmp-volume-1",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 5
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "Always",
+            "securityContext": {
+              "privileged": false
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "securityContext": {},
+        "imagePullSecrets": [
+          {
+            "name": "ali-registry"
+          }
+        ],
+        "schedulerName": "default-scheduler"
+      }
+    },
+    "strategy": {
+      "type": "RollingUpdate",
+      "rollingUpdate": {
+        "maxUnavailable": "25%",
+        "maxSurge": "25%"
+      }
+    },
+    "revisionHistoryLimit": 10,
+    "progressDeadlineSeconds": 600
+  },
+  "status": {
+    "observedGeneration": 141,
+    "replicas": 1,
+    "updatedReplicas": 1,
+    "readyReplicas": 1,
+    "availableReplicas": 1,
+    "conditions": [
+      {
+        "type": "Progressing",
+        "status": "True",
+        "lastUpdateTime": "2019-08-21T02:46:21Z",
+        "lastTransitionTime": "2018-04-03T05:05:29Z",
+        "reason": "NewReplicaSetAvailable",
+        "message": "ReplicaSet \"avacar-apigateway-v1-6fb94fc575\" has successfully progressed."
+      },
+      {
+        "type": "Available",
+        "status": "True",
+        "lastUpdateTime": "2019-08-26T07:28:36Z",
+        "lastTransitionTime": "2019-08-26T07:28:36Z",
+        "reason": "MinimumReplicasAvailable",
+        "message": "Deployment has minimum availability."
+      }
+    ]
+  }
+}
+
+#########################################################################################################################################################
+replicaset
+#########################################################################################################################################################
+
+{
+  "kind": "ReplicaSet",
+  "apiVersion": "extensions/v1beta1",
+  "metadata": {
+    "name": "avacar-apigateway-v1-6fb94fc575",
+    "namespace": "avacar",
+    "selfLink": "/apis/extensions/v1beta1/namespaces/avacar/replicasets/avacar-apigateway-v1-6fb94fc575",
+    "uid": "bda29441-c3bd-11e9-9c2f-00163e061600",
+    "resourceVersion": "109751876",
+    "generation": 9,
+    "creationTimestamp": "2019-08-21T02:45:30Z",
+    "labels": {
+      "k8s-app": "avacar-apigateway-v1",
+      "pod-template-hash": "2965097131"
+    },
+    "annotations": {
+      "deployment.kubernetes.io/desired-replicas": "1",
+      "deployment.kubernetes.io/max-replicas": "2",
+      "deployment.kubernetes.io/revision": "38"
+    },
+    "ownerReferences": [
+      {
+        "apiVersion": "extensions/v1beta1",
+        "kind": "Deployment",
+        "name": "avacar-apigateway-v1",
+        "uid": "a1022882-36fc-11e8-869b-00163e041622",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "k8s-app": "avacar-apigateway-v1",
+        "pod-template-hash": "2965097131"
+      }
+    },
+    "template": {
+      "metadata": {
+        "name": "avacar-apigateway-v1",
+        "creationTimestamp": null,
+        "labels": {
+          "k8s-app": "avacar-apigateway-v1",
+          "pod-template-hash": "2965097131"
+        }
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "tmp-volume-1",
+            "emptyDir": {}
+          }
+        ],
+        "containers": [
+          {
+            "name": "avacar-apigateway-v1",
+            "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-apigateway-v1:0.17.3",
+            "env": [
+              {
+                "name": "GC_MAX_METASPACE_SIZE",
+                "value": "400"
+              },
+              {
+                "name": "security_user_name",
+                "value": "avacar"
+              },
+              {
+                "name": "security_user_password",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "encrypt_keyStore_pwd",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "zuul_host_maxPerRouteConnections",
+                "value": "1000"
+              },
+              {
+                "name": "zuul_host_maxTotalConnections",
+                "value": "2000"
+              },
+              {
+                "name": "zuul_semaphore_maxSemaphores",
+                "value": "1000"
+              },
+              {
+                "name": "rabbitmq_host",
+                "value": "172.20.0.237"
+              },
+              {
+                "name": "rabbitmq_port",
+                "value": "5672"
+              },
+              {
+                "name": "rabbitmq_username",
+                "value": "rabbit"
+              },
+              {
+                "name": "rabbitmq_password",
+                "value": "rabbit"
+              },
+              {
+                "name": "JAVA_OPTIONS",
+                "value": "-Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "3Gi"
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "2Gi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "tmp-volume-1",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 5
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "Always",
+            "securityContext": {
+              "privileged": false
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "securityContext": {},
+        "imagePullSecrets": [
+          {
+            "name": "ali-registry"
+          }
+        ],
+        "schedulerName": "default-scheduler"
+      }
+    }
+  },
+  "status": {
+    "replicas": 1,
+    "fullyLabeledReplicas": 1,
+    "readyReplicas": 1,
+    "availableReplicas": 1,
+    "observedGeneration": 9
+  }
+}
