@@ -1,0 +1,566 @@
+#########################################################################################################################################################
+service
+#########################################################################################################################################################
+
+
+{
+  "kind": "Service",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "avacar-user-v1",
+    "namespace": "avacar",
+    "selfLink": "/api/v1/namespaces/avacar/services/avacar-user-v1",
+    "uid": "bbc127c5-36fc-11e8-8df2-00163e061600",
+    "resourceVersion": "164260",
+    "creationTimestamp": "2018-04-03T05:06:14Z",
+    "labels": {
+      "k8s-app": "avacar-user-v1"
+    }
+  },
+  "spec": {
+    "ports": [
+      {
+        "protocol": "TCP",
+        "port": 8080,
+        "targetPort": 8080
+      }
+    ],
+    "selector": {
+      "k8s-app": "avacar-user-v1"
+    },
+    "clusterIP": "10.31.6.143",
+    "type": "ClusterIP",
+    "sessionAffinity": "None"
+  },
+  "status": {
+    "loadBalancer": {}
+  }
+}
+
+#########################################################################################################################################################
+pod
+#########################################################################################################################################################
+
+{
+  "kind": "Pod",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "avacar-user-v1-f67fcd6d-frj6q",
+    "generateName": "avacar-user-v1-f67fcd6d-",
+    "namespace": "avacar",
+    "selfLink": "/api/v1/namespaces/avacar/pods/avacar-user-v1-f67fcd6d-frj6q",
+    "uid": "ea830f7e-b1dc-11e9-9c2f-00163e061600",
+    "resourceVersion": "103387538",
+    "creationTimestamp": "2019-07-29T08:43:19Z",
+    "labels": {
+      "k8s-app": "avacar-user-v1",
+      "pod-template-hash": "92397828"
+    },
+    "ownerReferences": [
+      {
+        "apiVersion": "extensions/v1beta1",
+        "kind": "ReplicaSet",
+        "name": "avacar-user-v1-f67fcd6d",
+        "uid": "23e71e52-a3b9-11e9-9c2f-00163e061600",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  },
+  "spec": {
+    "volumes": [
+      {
+        "name": "tmp-volume-1",
+        "emptyDir": {}
+      },
+      {
+        "name": "default-token-kc6w6",
+        "secret": {
+          "secretName": "default-token-kc6w6",
+          "defaultMode": 420
+        }
+      }
+    ],
+    "containers": [
+      {
+        "name": "avacar-user-v1",
+        "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1:0.16.9",
+        "env": [
+          {
+            "name": "GC_MAX_METASPACE_SIZE",
+            "value": "400"
+          },
+          {
+            "name": "security_user_name",
+            "value": "avacar"
+          },
+          {
+            "name": "security_user_password",
+            "value": "Admin@svwsc"
+          },
+          {
+            "name": "encrypt_keyStore_pwd",
+            "value": "Admin@svwsc"
+          },
+          {
+            "name": "rabbitmq_host",
+            "value": "172.20.0.237"
+          },
+          {
+            "name": "rabbitmq_port",
+            "value": "5672"
+          },
+          {
+            "name": "rabbitmq_username",
+            "value": "rabbit"
+          },
+          {
+            "name": "rabbitmq_password",
+            "value": "rabbit"
+          },
+          {
+            "name": "JAVA_OPTIONS",
+            "value": "-server -d64 -Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+          }
+        ],
+        "resources": {
+          "limits": {
+            "cpu": "2",
+            "memory": "3Gi"
+          },
+          "requests": {
+            "cpu": "500m",
+            "memory": "1Gi"
+          }
+        },
+        "volumeMounts": [
+          {
+            "name": "tmp-volume-1",
+            "mountPath": "/tmp"
+          },
+          {
+            "name": "default-token-kc6w6",
+            "readOnly": true,
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
+          }
+        ],
+        "readinessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 30,
+          "timeoutSeconds": 5,
+          "periodSeconds": 10,
+          "successThreshold": 1,
+          "failureThreshold": 5
+        },
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "imagePullPolicy": "Always",
+        "securityContext": {
+          "privileged": false
+        }
+      }
+    ],
+    "restartPolicy": "Always",
+    "terminationGracePeriodSeconds": 30,
+    "dnsPolicy": "ClusterFirst",
+    "serviceAccountName": "default",
+    "serviceAccount": "default",
+    "nodeName": "cn-shanghai.i-uf6gb2498ykuzoz6dx5v",
+    "securityContext": {},
+    "imagePullSecrets": [
+      {
+        "name": "ali-registry"
+      }
+    ],
+    "schedulerName": "default-scheduler",
+    "tolerations": [
+      {
+        "key": "node.kubernetes.io/not-ready",
+        "operator": "Exists",
+        "effect": "NoExecute",
+        "tolerationSeconds": 300
+      },
+      {
+        "key": "node.kubernetes.io/unreachable",
+        "operator": "Exists",
+        "effect": "NoExecute",
+        "tolerationSeconds": 300
+      }
+    ]
+  },
+  "status": {
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Initialized",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-07-29T08:43:19Z"
+      },
+      {
+        "type": "Ready",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-07-29T08:44:25Z"
+      },
+      {
+        "type": "PodScheduled",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2019-07-29T08:43:19Z"
+      }
+    ],
+    "hostIP": "172.20.0.30",
+    "podIP": "10.30.6.144",
+    "startTime": "2019-07-29T08:43:19Z",
+    "containerStatuses": [
+      {
+        "name": "avacar-user-v1",
+        "state": {
+          "running": {
+            "startedAt": "2019-07-29T08:43:23Z"
+          }
+        },
+        "lastState": {},
+        "ready": true,
+        "restartCount": 0,
+        "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1:0.16.9",
+        "imageID": "docker-pullable://registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1@sha256:e678aa703330bc922da43bfb0d144cb7170b39138d6801db02cf97088f919789",
+        "containerID": "docker://3a012879281b2d1b92224e6beba75634ee57448555a87a4d0b922ef904b12741"
+      }
+    ],
+    "qosClass": "Burstable"
+  }
+}
+
+#########################################################################################################################################################
+deployment
+#########################################################################################################################################################
+
+
+{
+  "kind": "Deployment",
+  "apiVersion": "extensions/v1beta1",
+  "metadata": {
+    "name": "avacar-user-v1",
+    "namespace": "avacar",
+    "selfLink": "/apis/extensions/v1beta1/namespaces/avacar/deployments/avacar-user-v1",
+    "uid": "bb74f872-36fc-11e8-8df2-00163e061600",
+    "resourceVersion": "103387541",
+    "generation": 97,
+    "creationTimestamp": "2018-04-03T05:06:13Z",
+    "labels": {
+      "k8s-app": "avacar-user-v1"
+    },
+    "annotations": {
+      "deployment.kubernetes.io/revision": "32",
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"extensions/v1beta1\",\"kind\":\"Deployment\",\"metadata\":{\"annotations\":{},\"labels\":{\"k8s-app\":\"avacar-user-v1\"},\"name\":\"avacar-user-v1\",\"namespace\":\"avacar\"},\"spec\":{\"progressDeadlineSeconds\":600,\"replicas\":1,\"revisionHistoryLimit\":10,\"selector\":{\"matchLabels\":{\"k8s-app\":\"avacar-user-v1\"}},\"strategy\":{\"rollingUpdate\":{\"maxSurge\":\"25%\",\"maxUnavailable\":\"25%\"},\"type\":\"RollingUpdate\"},\"template\":{\"metadata\":{\"labels\":{\"k8s-app\":\"avacar-user-v1\"},\"name\":\"avacar-user-v1\"},\"spec\":{\"containers\":[{\"command\":null,\"env\":[{\"name\":\"JAVA_OPTIONS\",\"value\":\"-server -d64 -Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8\"},{\"name\":\"GC_MAX_METASPACE_SIZE\",\"value\":\"400\"},{\"name\":\"security_user_name\",\"value\":\"avacar\"},{\"name\":\"security_user_password\",\"value\":\"Admin@svwsc\"},{\"name\":\"rabbitmq_host\",\"value\":\"172.20.0.237\"},{\"name\":\"rabbitmq_port\",\"value\":\"5672\"},{\"name\":\"rabbitmq_username\",\"value\":\"rabbit\"},{\"name\":\"rabbitmq_password\",\"value\":\"rabbit\"},{\"name\":\"encrypt_keyStore_pwd\",\"value\":\"Admin@svwsc\"}],\"image\":\"registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1:0.16.9\",\"imagePullPolicy\":\"Always\",\"name\":\"avacar-user-v1\",\"readinessProbe\":{\"failureThreshold\":5,\"httpGet\":{\"path\":\"/health\",\"port\":8080,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":30,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":5},\"resources\":{\"limits\":{\"cpu\":2,\"memory\":\"3Gi\"},\"requests\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}},\"securityContext\":{\"privileged\":false},\"terminationMessagePath\":\"/dev/termination-log\",\"terminationMessagePolicy\":\"File\",\"volumeMounts\":[{\"mountPath\":\"/tmp\",\"name\":\"tmp-volume-1\"}]}],\"dnsPolicy\":\"ClusterFirst\",\"imagePullSecrets\":[{\"name\":\"ali-registry\"}],\"restartPolicy\":\"Always\",\"schedulerName\":\"default-scheduler\",\"securityContext\":{},\"terminationGracePeriodSeconds\":30,\"volumes\":[{\"emptyDir\":{},\"name\":\"tmp-volume-1\"}]}}}}\n"
+    }
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "k8s-app": "avacar-user-v1"
+      }
+    },
+    "template": {
+      "metadata": {
+        "name": "avacar-user-v1",
+        "creationTimestamp": null,
+        "labels": {
+          "k8s-app": "avacar-user-v1"
+        }
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "tmp-volume-1",
+            "emptyDir": {}
+          }
+        ],
+        "containers": [
+          {
+            "name": "avacar-user-v1",
+            "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1:0.16.9",
+            "env": [
+              {
+                "name": "GC_MAX_METASPACE_SIZE",
+                "value": "400"
+              },
+              {
+                "name": "security_user_name",
+                "value": "avacar"
+              },
+              {
+                "name": "security_user_password",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "encrypt_keyStore_pwd",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "rabbitmq_host",
+                "value": "172.20.0.237"
+              },
+              {
+                "name": "rabbitmq_port",
+                "value": "5672"
+              },
+              {
+                "name": "rabbitmq_username",
+                "value": "rabbit"
+              },
+              {
+                "name": "rabbitmq_password",
+                "value": "rabbit"
+              },
+              {
+                "name": "JAVA_OPTIONS",
+                "value": "-server -d64 -Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "3Gi"
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "1Gi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "tmp-volume-1",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 5
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "Always",
+            "securityContext": {
+              "privileged": false
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "securityContext": {},
+        "imagePullSecrets": [
+          {
+            "name": "ali-registry"
+          }
+        ],
+        "schedulerName": "default-scheduler"
+      }
+    },
+    "strategy": {
+      "type": "RollingUpdate",
+      "rollingUpdate": {
+        "maxUnavailable": "25%",
+        "maxSurge": "25%"
+      }
+    },
+    "revisionHistoryLimit": 10,
+    "progressDeadlineSeconds": 600
+  },
+  "status": {
+    "observedGeneration": 97,
+    "replicas": 1,
+    "updatedReplicas": 1,
+    "readyReplicas": 1,
+    "availableReplicas": 1,
+    "conditions": [
+      {
+        "type": "Progressing",
+        "status": "True",
+        "lastUpdateTime": "2019-07-11T08:53:22Z",
+        "lastTransitionTime": "2018-04-03T05:06:13Z",
+        "reason": "NewReplicaSetAvailable",
+        "message": "ReplicaSet \"avacar-user-v1-f67fcd6d\" has successfully progressed."
+      },
+      {
+        "type": "Available",
+        "status": "True",
+        "lastUpdateTime": "2019-07-29T08:44:25Z",
+        "lastTransitionTime": "2019-07-29T08:44:25Z",
+        "reason": "MinimumReplicasAvailable",
+        "message": "Deployment has minimum availability."
+      }
+    ]
+  }
+}
+
+#########################################################################################################################################################
+ReplicaSet
+#########################################################################################################################################################
+{
+  "kind": "ReplicaSet",
+  "apiVersion": "extensions/v1beta1",
+  "metadata": {
+    "name": "avacar-user-v1-7d6f5d65f7",
+    "namespace": "avacar",
+    "selfLink": "/apis/extensions/v1beta1/namespaces/avacar/replicasets/avacar-user-v1-7d6f5d65f7",
+    "uid": "9904269a-90d2-11e9-9c2f-00163e061600",
+    "resourceVersion": "99289924",
+    "generation": 2,
+    "creationTimestamp": "2019-06-17T07:36:19Z",
+    "labels": {
+      "k8s-app": "avacar-user-v1",
+      "pod-template-hash": "3829182193"
+    },
+    "annotations": {
+      "deployment.kubernetes.io/desired-replicas": "1",
+      "deployment.kubernetes.io/max-replicas": "2",
+      "deployment.kubernetes.io/revision": "31"
+    },
+    "ownerReferences": [
+      {
+        "apiVersion": "extensions/v1beta1",
+        "kind": "Deployment",
+        "name": "avacar-user-v1",
+        "uid": "bb74f872-36fc-11e8-8df2-00163e061600",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  },
+  "spec": {
+    "replicas": 0,
+    "selector": {
+      "matchLabels": {
+        "k8s-app": "avacar-user-v1",
+        "pod-template-hash": "3829182193"
+      }
+    },
+    "template": {
+      "metadata": {
+        "name": "avacar-user-v1",
+        "creationTimestamp": null,
+        "labels": {
+          "k8s-app": "avacar-user-v1",
+          "pod-template-hash": "3829182193"
+        }
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "tmp-volume-1",
+            "emptyDir": {}
+          }
+        ],
+        "containers": [
+          {
+            "name": "avacar-user-v1",
+            "image": "registry-vpc.cn-shanghai.aliyuncs.com/svw-avacar/avacar-user-v1:0.16.8",
+            "env": [
+              {
+                "name": "GC_MAX_METASPACE_SIZE",
+                "value": "400"
+              },
+              {
+                "name": "security_user_name",
+                "value": "avacar"
+              },
+              {
+                "name": "security_user_password",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "encrypt_keyStore_pwd",
+                "value": "Admin@svwsc"
+              },
+              {
+                "name": "rabbitmq_host",
+                "value": "172.20.0.237"
+              },
+              {
+                "name": "rabbitmq_port",
+                "value": "5672"
+              },
+              {
+                "name": "rabbitmq_username",
+                "value": "rabbit"
+              },
+              {
+                "name": "rabbitmq_password",
+                "value": "rabbit"
+              },
+              {
+                "name": "JAVA_OPTIONS",
+                "value": "-server -d64 -Xms2048m -Xmx2048m -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=utf-8"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "3Gi"
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "1Gi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "tmp-volume-1",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 5
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "Always",
+            "securityContext": {
+              "privileged": false
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "securityContext": {},
+        "imagePullSecrets": [
+          {
+            "name": "ali-registry"
+          }
+        ],
+        "schedulerName": "default-scheduler"
+      }
+    }
+  },
+  "status": {
+    "replicas": 0,
+    "observedGeneration": 2
+  }
+}
