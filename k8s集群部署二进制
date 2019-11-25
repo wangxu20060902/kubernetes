@@ -1,3 +1,5 @@
+https://www.cnblogs.com/leffss/p/8784426.html
+
 k8s 二进制安装部署
 
 k8s-master ： 192.168.163.174  etcd、kube-apiserver、kube-controller-manager、kube-scheduler、kubelet、kube_proxy
