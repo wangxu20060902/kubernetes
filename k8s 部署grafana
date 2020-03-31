@@ -32,9 +32,9 @@ spec:
           - name: grafana-data
             mountPath: /var/lib/grafana
             subPath: grafana
-  volumes:
-  - emptyDir:{}
-    name: grafana-data
+      volumes:
+      - emptyDir:{}
+        name: grafana-data
  
  -----------------------
 ###创建grafana-service
