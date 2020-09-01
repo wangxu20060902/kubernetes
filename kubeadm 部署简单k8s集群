@@ -1,3 +1,5 @@
+高可用方案可以参考：https://www.linkops.cn/xn/673.html
+
 kubeadm 安装 kubernetes 集群
 master：192.168.124.143  2core 2g
 node01：192.168.124.144  1core 1.5G
